@@ -8,6 +8,7 @@ public partial class ExhaustiveChoiceList<T>
 
     public T Choose()
     {
+        if (_choices.Count == 0) throw new InvalidOperationException("No choices available.");
         if (_availableIndices.Count == 0) ResetAvailableIndices();
 
         int index = Random.Shared.Next(_availableIndices.Count);
