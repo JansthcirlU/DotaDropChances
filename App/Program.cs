@@ -1,35 +1,47 @@
 ﻿using App.Simulation;
-using Domain.Items;
 using Domain.Treasures;
 
 Treasure treasure = TreasureBuilder.GetDragonsHoard();
-var (ancientDragonKingSet, _) = DropBuilder.GetAncientDragonKingSet();
-ItemSetId ancientDragonKingSetId = ancientDragonKingSet.Id;
-
-int tries = 200_000;
-Dictionary<int, List<OpeningResult>> results = [];
+int tries = 100_000;
+decimal budget = 14 * 2.35m;
+decimal timesMetBudget = 0.0m;
+decimal timesBreakEven = 0.0m;
+decimal totalWon = 0.0m;
+decimal totalSpent = 0.0m;
+List<OpeningResult> results = [];
 
 for (int i = 0; i < tries; i++)
 {
-    results[i] = [];
-    while (true)
+    decimal spent = 0.0m;
+    decimal won = 0.0m;
+    while (spent + treasure.Price <= budget)
     {
+        spent += treasure.Price;
         var (itemSet, bonusSet) = treasure.Open();
         OpeningResult result = new(itemSet, bonusSet);
-        results[i].Add(result);
-        
-        if (bonusSet?.Id == ancientDragonKingSetId)
-        {
-            break;
-        }
+        results.Add(result);
+        won += result.MarketValue;
+
+        if (won >= spent) break;
+    }
+
+    if (won >= spent)
+    {
+        timesBreakEven++;
+        totalWon += won;
+    }
+    else
+    {
+        timesMetBudget++;
+        totalSpent += spent;
     }
 }
 
-decimal totalOpenings = results.SelectMany(r => r.Value).ToList().Count;
-decimal averageTries = (decimal)results.Average(r => r.Value.Count);
-decimal totalUnusuals = results.SelectMany(r => r.Value).Count(r => r.IsUnusualDrop || r.IsUnusualBonusDrop);
-decimal averageMarketValue = results.SelectMany(r => r.Value).Sum(result => result.MarketValue) / totalOpenings;
-Console.WriteLine($"Average tries to get the Ancient Dragon King set: {averageTries:F2}");
-Console.WriteLine($"Average spent: {Math.Ceiling(averageTries) * treasure.Price:C2}.");
-Console.WriteLine($"Average market value: {averageMarketValue:C2}");
-Console.WriteLine($"Unusuals percentage: {100.0m * totalUnusuals / totalOpenings:F2}%");
+decimal totalOpenings = results.Count;
+Console.WriteLine($"On a budget of {budget:C}, you would have broken even or turned a profit {timesBreakEven / tries:P} of the time and gone over budget {timesMetBudget / tries:P} of the time.");
+Console.WriteLine("Sanity checks:");
+Console.WriteLine($"  Average treasures opened: {totalOpenings / tries}");
+Console.WriteLine($"  Average unusuals: {results.Count(r => r.IsUnusualBonusDrop || r.IsUnusualDrop) / totalOpenings:P}");
+Console.WriteLine($"  Average won: {totalWon / tries:C}");
+Console.WriteLine($"  Average spent: {totalSpent / tries:C}");
+Console.WriteLine($"  Average profit: {(totalWon - totalSpent) / tries:C}");
