@@ -1,47 +1,72 @@
-﻿using App.Simulation;
+﻿using System.Diagnostics;
+using App.Simulation;
+using Domain.Extensions;
 using Domain.Treasures;
 
 Treasure treasure = TreasureBuilder.GetDragonsHoard();
-int tries = 100_000;
-decimal budget = 14 * 2.35m;
-decimal timesMetBudget = 0.0m;
-decimal timesBreakEven = 0.0m;
-decimal totalWon = 0.0m;
-decimal totalSpent = 0.0m;
-List<OpeningResult> results = [];
-
-for (int i = 0; i < tries; i++)
+List<int> treasuresBought = [1, 14, 140, 1_400, 14_000];
+foreach (int treasures in treasuresBought)
 {
-    decimal spent = 0.0m;
-    decimal won = 0.0m;
-    while (spent + treasure.Price <= budget)
-    {
-        spent += treasure.Price;
-        var (itemSet, bonusSet) = treasure.Open();
-        OpeningResult result = new(itemSet, bonusSet);
-        results.Add(result);
-        won += result.MarketValue;
+    int tries = 100_000;
+    decimal budget = treasures * 2.35m;
+    List<OpeningResult> breakEvenResults = [];
+    List<OpeningResult> metBudgetResults = [];
 
-        if (won >= spent) break;
+    for (int i = 0; i < tries; i++)
+    {
+        List<OpeningResult> results = [];
+        decimal spent = 0.0m;
+        decimal won = 0.0m;
+        while (spent + treasure.Price <= budget)
+        {
+            spent += treasure.Price;
+            var (itemSet, bonusSet) = treasure.Open();
+            OpeningResult result = new(itemSet, bonusSet);
+            results.Add(result);
+            won += result.MarketValue;
+            if (won >= spent) break;
+            spent -= result.MarketValue;
+            won -= result.MarketValue;
+        }
+
+        if (won >= spent)
+        {
+            breakEvenResults.AddRange([.. results]);
+        }
+        else
+        {
+            metBudgetResults.AddRange([.. results]);
+        }
     }
 
-    if (won >= spent)
-    {
-        timesBreakEven++;
-        totalWon += won;
-    }
-    else
-    {
-        timesMetBudget++;
-        totalSpent += spent;
-    }
+    // Results turned profit or broke even
+    decimal timesBreakEven = breakEvenResults.CountDecimal();
+    decimal unusualsBreakEven = breakEvenResults.CountDecimal(r => r.IsUnusualDrop || r.IsUnusualBonusDrop);
+    decimal averageProfit = breakEvenResults.Sum(r => (r.MarketValue - treasure.Price) / timesBreakEven);
+
+    // Results met budget
+    decimal timesMetBudget = metBudgetResults.CountDecimal();
+    decimal unusualsMetBudget = metBudgetResults.CountDecimal(r => r.IsUnusualDrop || r.IsUnusualBonusDrop);
+    decimal averageLoss = metBudgetResults.Sum(r => (r.MarketValue - treasure.Price) / timesMetBudget);
+
+    // All results
+    decimal totalOpenings = timesBreakEven + timesMetBudget;
+    decimal unusualOpenings = unusualsBreakEven + unusualsMetBudget;
+    decimal breakEvenChance = timesBreakEven / totalOpenings;
+    decimal metBudgetChance = timesMetBudget / totalOpenings;
+
+    // Summary
+    string summary =
+    $"""
+    On a budget of {budget:C}, you would have broken even or turned a profit {breakEvenChance:P} of the time and met the budget {metBudgetChance:P} of the time.
+    Sanity checks:
+      Average treasures opened: {totalOpenings / tries}
+      Average unusuals: {unusualOpenings / totalOpenings:P}
+      Average won: {averageProfit:C}
+      Average spent: {averageLoss:C}
+      Average profit: {averageProfit * breakEvenChance + averageLoss * metBudgetChance:C}
+    """;
+    Console.WriteLine(summary);
 }
 
-decimal totalOpenings = results.Count;
-Console.WriteLine($"On a budget of {budget:C}, you would have broken even or turned a profit {timesBreakEven / tries:P} of the time and gone over budget {timesMetBudget / tries:P} of the time.");
-Console.WriteLine("Sanity checks:");
-Console.WriteLine($"  Average treasures opened: {totalOpenings / tries}");
-Console.WriteLine($"  Average unusuals: {results.Count(r => r.IsUnusualBonusDrop || r.IsUnusualDrop) / totalOpenings:P}");
-Console.WriteLine($"  Average won: {totalWon / tries:C}");
-Console.WriteLine($"  Average spent: {totalSpent / tries:C}");
-Console.WriteLine($"  Average profit: {(totalWon - totalSpent) / tries:C}");
+Debugger.Break();
